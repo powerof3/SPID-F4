@@ -1,0 +1,14 @@
+set(SOURCES
+	include/Cache.h
+	include/Defs.h
+	include/Distribute.h
+	include/LookupConfigs.h
+	include/LookupForms.h
+	include/PCH.h
+	src/Cache.cpp
+	src/Distribute.cpp
+	src/LookupConfigs.cpp
+	src/LookupForms.cpp
+	src/PCH.cpp
+	src/main.cpp
+)
