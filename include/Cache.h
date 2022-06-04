@@ -11,9 +11,9 @@ namespace Cache
 		void FillMap();
 
 		std::string GetEditorID(RE::FormID a_formID);
-		RE::FormID GetFormID(const std::string& a_editorID);
+		void CacheEditorID(const RE::TESForm* a_form, const char* a_editorID);
 
-	private:
+    private:
 		using Lock = std::mutex;
 		using Locker = std::scoped_lock<Lock>;
 
@@ -27,7 +27,6 @@ namespace Cache
 
 		mutable Lock _lock;
 		robin_hood::unordered_flat_map<RE::FormID, std::string> _formIDToEditorIDMap;
-		robin_hood::unordered_flat_map<std::string, RE::FormID> _editorIDToFormIDMap;
 	};
 
 	namespace FormType
@@ -212,5 +211,30 @@ namespace Cache
 		std::string GetWhitelistFormString(RE::FormType a_type);
 
 		std::string GetBlacklistFormString(RE::FormType a_type);
+	}
+
+	//Cache spell formEditorIDs
+	namespace LoadFormEditorIDs
+	{
+		struct SetFormEditorID_Cache
+		{
+			static bool thunk(RE::TESForm* a_this, const char* a_str)
+			{
+				if (!a_this->IsCreated() && !string::is_empty(a_str)) {
+					EditorID::GetSingleton()->CacheEditorID(a_this, a_str);
+				}
+				return func(a_this, a_str);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+
+			static inline constexpr size_t size{ 0x3B };
+		};
+
+		inline void Install()
+		{
+			stl::write_vfunc<RE::SpellItem, SetFormEditorID_Cache>();
+
+			logger::info("Installed spell editorID cache patch"sv);
+		}
 	}
 }

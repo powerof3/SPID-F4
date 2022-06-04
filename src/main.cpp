@@ -4,7 +4,7 @@
 
 void MessageHandler(F4SE::MessagingInterface::Message* a_message)
 {
-	if (a_message->type == F4SE::MessagingInterface::kGameDataReady) {
+	if (a_message->type == F4SE::MessagingInterface::kGameDataReady && static_cast<bool>(a_message->data)) {
 		logger::info("{:*^30}", "LOOKUP");
 
 		Cache::EditorID::GetSingleton()->FillMap();
@@ -58,12 +58,13 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 {
 	InitializeLog();
 
-	logger::info(FMT_STRING("{} log opened."sv), Version::PROJECT.data());
-
 	F4SE::Init(a_f4se);
 
 	if (INI::Read()) {
-		const auto messaging = F4SE::GetMessagingInterface();
+		logger::info("{:*^30}", "PATCH");
+	    Cache::LoadFormEditorIDs::Install();
+
+	    const auto messaging = F4SE::GetMessagingInterface();
 		messaging->RegisterListener(MessageHandler);
 	}
 

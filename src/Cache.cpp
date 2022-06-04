@@ -11,20 +11,18 @@ namespace Cache
 	void EditorID::FillMap()
 	{
 		const auto& [map, lock] = RE::TESForm::GetAllFormsByEditorID();
-		const RE::BSAutoReadLock locker{ lock };
+		const RE::BSAutoReadLock locker{ lock.get() };
 		if (map) {
 			for (auto& [id, form] : *map) {
-				_editorIDToFormIDMap.emplace(id.c_str(), form->GetFormID());
 				_formIDToEditorIDMap.emplace(form->GetFormID(), id.c_str());
 			}
 		}
 	}
 
-	RE::FormID EditorID::GetFormID(const std::string& a_editorID)
+	void EditorID::CacheEditorID(const RE::TESForm* a_form, const char* a_editorID)
 	{
 		Locker locker(_lock);
-		auto it = _editorIDToFormIDMap.find(a_editorID);
-		return it != _editorIDToFormIDMap.end() ? it->second : 0;
+		_formIDToEditorIDMap.emplace(a_form->GetFormID(), a_editorID);
 	}
 
 	std::string EditorID::GetEditorID(RE::FormID a_formID)
