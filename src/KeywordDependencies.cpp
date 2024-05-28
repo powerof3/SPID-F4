@@ -82,8 +82,8 @@ void Dependencies::ResolveKeywords()
 				allKeywords[edid] = kwd;
 			} else {
 				if (const auto file = kwd->GetFile(0)) {
-					const auto  modname = file->GetFilename();
-					const auto  formID = kwd->GetLocalFormID();
+					const auto modname = file->GetFilename();
+					const auto formID = kwd->GetLocalFormID();
 					logger::error("\tWARN : [0x{:X}~{}] keyword has an empty editorID!", formID, modname);
 				}
 			}

@@ -63,7 +63,7 @@ namespace Distribute::PlayerLeveledActor
 			}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
-		static inline size_t idx{ 0x15 };
+		static inline size_t                           idx{ 0x15 };
 	};
 
 	// Re-add dist entries if level is valid
@@ -115,7 +115,7 @@ namespace Distribute::PlayerLeveledActor
 			func(a_this, a_buf);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
-		static inline size_t idx{ 0x12 };
+		static inline size_t                           idx{ 0x12 };
 	};
 
 	void Install()

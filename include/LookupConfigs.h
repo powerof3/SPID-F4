@@ -135,83 +135,83 @@ namespace Distribution::INI
 	{
 		template <typename Data>
 		concept typed_data = requires(Data data) {
-			{
-				data.type
-			} -> std::same_as<RECORD::TYPE&>;
-			{
-				data.type = std::declval<RECORD::TYPE>()
-			};
-		};
+								 {
+									 data.type
+									 } -> std::same_as<RECORD::TYPE&>;
+								 {
+									 data.type = std::declval<RECORD::TYPE>()
+								 };
+							 };
 
 		template <typename Data>
 		concept form_data = requires(Data data) {
-			{
-				data.rawForm
-			} -> std::same_as<FormOrEditorID&>;
-			{
-				data.rawForm = std::declval<FormOrEditorID>()
-			};
-		};
+								{
+									data.rawForm
+									} -> std::same_as<FormOrEditorID&>;
+								{
+									data.rawForm = std::declval<FormOrEditorID>()
+								};
+							};
 
 		template <typename Data>
 		concept string_filterable_data = requires(Data data) {
-			{
-				data.stringFilters
-			} -> std::same_as<StringFilters&>;
-			{
-				data.stringFilters = std::declval<StringFilters>()
-			};
-		};
+											 {
+												 data.stringFilters
+												 } -> std::same_as<StringFilters&>;
+											 {
+												 data.stringFilters = std::declval<StringFilters>()
+											 };
+										 };
 
 		template <typename Data>
 		concept form_filterable_data = requires(Data data) {
-			{
-				data.formFilters
-			} -> std::same_as<RawFormFilters&>;
-			{
-				data.formFilters = std::declval<RawFormFilters>()
-			};
-		};
+										   {
+											   data.formFilters
+											   } -> std::same_as<RawFormFilters&>;
+										   {
+											   data.formFilters = std::declval<RawFormFilters>()
+										   };
+									   };
 
 		template <typename Data>
 		concept level_filterable_data = requires(Data data) {
-			{
-				data.levelFilters
-			} -> std::same_as<LevelFilters&>;
-			{
-				data.levelFilters = std::declval<LevelFilters>()
-			};
-		};
+											{
+												data.levelFilters
+												} -> std::same_as<LevelFilters&>;
+											{
+												data.levelFilters = std::declval<LevelFilters>()
+											};
+										};
 
 		template <typename Data>
 		concept trait_filterable_data = requires(Data data) {
-			{
-				data.traits
-			} -> std::same_as<Traits&>;
-			{
-				data.traits = std::declval<Traits>()
-			};
-		};
+											{
+												data.traits
+												} -> std::same_as<Traits&>;
+											{
+												data.traits = std::declval<Traits>()
+											};
+										};
 
 		template <typename Data>
 		concept countable_data = requires(Data data) {
-			{
-				data.idxOrCount
-			} -> std::same_as<IndexOrCount&>;
-			{
-				data.idxOrCount = std::declval<IndexOrCount>()
-			};
-		};
+									 {
+										 data.idxOrCount
+										 } -> std::same_as<IndexOrCount&>;
+									 {
+										 data.idxOrCount = std::declval<IndexOrCount>()
+									 };
+								 };
 
 		template <typename Data>
 		concept randomized_data = requires(Data data) {
-			{
-				data.chance
-			} -> std::same_as<PercentChance&>;
-			{
-				data.chance = std::declval<PercentChance>()
-			};
-		};
+									  {
+										  data.chance
+										  } -> std::same_as<PercentChance&>;
+									  {
+										  data.chance = std::declval<PercentChance>()
+									  };
+								  };
 	}
 
 	using namespace concepts;
@@ -401,7 +401,7 @@ namespace Distribution::INI
 				if (auto skills = string::split(sanitizedLevel, " "); !skills.empty()) {
 					auto type = distribution::get_record(skills[0]);
 					auto minLevel = string::to_num<float>(skills[1]);
-					
+
 					if (skills.size() > 2) {
 						auto maxLevel = string::to_num<float>(skills[2]);
 						avLevels.push_back({ type, Range(minLevel, maxLevel) });
