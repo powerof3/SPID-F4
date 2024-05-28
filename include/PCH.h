@@ -6,6 +6,11 @@
 #define NOMINMAX
 #define NOSERVICE
 
+#include <ranges>
+#include <set>
+#include <shared_mutex>
+#include <unordered_set>
+
 #pragma warning(push)
 #include "F4SE/F4SE.h"
 #include "RE/Fallout.h"
@@ -16,21 +21,57 @@
 #	include <spdlog/sinks/msvc_sink.h>
 #endif
 
-#include <robin_hood.h>
-#include <SimpleIni.h>
-#include <frozen/map.h>
-#include <robin_hood.h>
+#include <ClibUtil/distribution.hpp>
+#include <ClibUtil/rng.hpp>
+#include <ClibUtil/simpleINI.hpp>
+#include <ClibUtil/singleton.hpp>
+#include <ClibUtil/string.hpp>
+#include <ClibUtil/timer.hpp>
+#include <ankerl/unordered_dense.h>
 #include <srell.hpp>
+
+#include "LogBuffer.h"
 #pragma warning(pop)
 
 #define DLLEXPORT __declspec(dllexport)
 
 namespace logger = F4SE::log;
-namespace numeric = F4SE::stl::numeric;
-namespace string = F4SE::stl::string;
+namespace buffered_logger = LogBuffer;
+
+using namespace clib_util;
+using namespace clib_util::singleton;
 
 using namespace std::literals;
-using RNG = F4SE::stl::RNG;
+using namespace string::literals;
+
+using RNG = clib_util::RNG;
+
+// for visting variants
+template <class... Ts>
+struct overload : Ts...
+{
+	using Ts::operator()...;
+};
+
+template <class K, class D>
+using Map = ankerl::unordered_dense::map<K, D>;
+template <class K>
+using Set = ankerl::unordered_dense::set<K>;
+
+struct string_hash
+{
+	using is_transparent = void;  // enable heterogeneous overloads
+	using is_avalanching = void;  // mark class as high quality avalanching hash
+
+	[[nodiscard]] std::uint64_t operator()(std::string_view str) const noexcept
+	{
+		return ankerl::unordered_dense::hash<std::string_view>{}(str);
+	}
+};
+
+template <class D>
+using StringMap = ankerl::unordered_dense::segmented_map<std::string, D, string_hash, std::equal_to<>>;
+using StringSet = ankerl::unordered_dense::segmented_set<std::string, string_hash, std::equal_to<>>;
 
 namespace stl
 {
@@ -41,7 +82,7 @@ namespace stl
 	{
 		F4SE::AllocTrampoline(14);
 
-	    auto& trampoline = F4SE::GetTrampoline();
+		auto& trampoline = F4SE::GetTrampoline();
 		T::func = trampoline.write_call<5>(a_src, T::thunk);
 	}
 
@@ -49,7 +90,7 @@ namespace stl
 	void write_vfunc()
 	{
 		REL::Relocation<std::uintptr_t> vtbl{ F::VTABLE[index] };
-		T::func = vtbl.write_vfunc(T::size, T::thunk);
+		T::func = vtbl.write_vfunc(T::idx, T::thunk);
 	}
 
 	template <class F, class T>
@@ -61,8 +102,8 @@ namespace stl
 
 namespace RE
 {
-    using FormID = std::uint32_t;
-    using RefHandle = std::uint32_t;
+	using FormID = std::uint32_t;
+	using RefHandle = std::uint32_t;
 	using FormType = ENUM_FORM_ID;
 
 	struct SEXES

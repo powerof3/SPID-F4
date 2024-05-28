@@ -1,315 +1,236 @@
 #pragma once
-#include "LookupForms.h"
 
-namespace Filter
-{
-	namespace detail
-	{
-		namespace name
-		{
-			inline bool contains(const std::string& a_name, const StringVec& a_strings)
-			{
-				return std::ranges::any_of(a_strings, [&](const auto& str) {
-					return string::icontains(a_name, str);
-				});
-			}
-
-			inline bool matches(const std::string& a_name, const StringVec& a_strings)
-			{
-				return std::ranges::any_of(a_strings, [&](const auto& str) {
-					return string::iequals(a_name, str);
-				});
-			}
-		}
-
-		namespace form
-		{
-			inline bool get_type(RE::TESNPC& a_actorbase, RE::TESForm* a_filter)
-			{
-				switch (a_filter->GetFormType()) {
-				case RE::FormType::kCSTY:
-					return a_actorbase.GetCombatStyle() == a_filter;
-				case RE::FormType::kCLAS:
-					return a_actorbase.cl == a_filter;
-				case RE::FormType::kFACT:
-					{
-						const auto faction = static_cast<RE::TESFaction*>(a_filter);
-						return faction && a_actorbase.IsInFaction(faction);
-					}
-				case RE::FormType::kRACE:
-					return a_actorbase.GetFormRace() == a_filter;
-				case RE::FormType::kOTFT:
-					return a_actorbase.defOutfit == a_filter;
-				case RE::FormType::kNPC_:
-					return &a_actorbase == a_filter;
-				case RE::FormType::kVTYP:
-					return a_actorbase.voiceType == a_filter;
-				default:
-					return false;
-				}
-			}
-
-			inline bool matches(RE::TESNPC& a_actorbase, const FormVec& a_forms)
-			{
-				return std::ranges::any_of(a_forms, [&a_actorbase](const auto& a_formFile) {
-					if (std::holds_alternative<RE::TESForm*>(a_formFile)) {
-						auto form = std::get<RE::TESForm*>(a_formFile);
-						return form && get_type(a_actorbase, form);
-					}
-					if (std::holds_alternative<const RE::TESFile*>(a_formFile)) {
-						auto file = std::get<const RE::TESFile*>(a_formFile);
-						return file && file->IsFormInMod(a_actorbase.GetFormID());
-					}
-					return false;
-				});
-			}
-
-			inline bool matches_ALL(RE::TESNPC& a_actorbase, const FormVec& a_forms)
-			{
-				return std::ranges::all_of(a_forms, [&a_actorbase](const auto& a_formFile) {
-					if (std::holds_alternative<RE::TESForm*>(a_formFile)) {
-						auto form = std::get<RE::TESForm*>(a_formFile);
-						return form && get_type(a_actorbase, form);
-					}
-					if (std::holds_alternative<const RE::TESFile*>(a_formFile)) {
-						auto file = std::get<const RE::TESFile*>(a_formFile);
-						return file && file->IsFormInMod(a_actorbase.GetFormID());
-					}
-					return false;
-				});
-			}
-		}
-
-		namespace keyword
-		{
-			inline bool contains(RE::TESNPC& a_actorbase, const StringVec& a_strings)
-			{
-				return std::ranges::any_of(a_strings, [&a_actorbase](const auto& str) {
-					return a_actorbase.ContainsKeyword(str);
-				});
-			}
-
-			inline bool matches(RE::TESNPC& a_actorbase, const StringVec& a_strings, bool a_matchesAll = false)
-			{
-				const auto has_keyword = [&](const auto& str) {
-					return a_actorbase.HasApplicableKeywordString(str);
-				};
-
-				if (a_matchesAll) {
-					return std::ranges::all_of(a_strings, has_keyword);
-				}
-				return std::ranges::any_of(a_strings, has_keyword);
-			}
-		}
-	}
-
-	inline bool strings(RE::TESNPC& a_actorbase, const FormData& a_formData)
-	{
-		auto& [strings_ALL, strings_NOT, strings_MATCH, strings_ANY] = std::get<DATA::TYPE::kStrings>(a_formData);
-
-		if (!strings_ALL.empty() && !detail::keyword::matches(a_actorbase, strings_ALL, true)) {
-			return false;
-		}
-
-		const std::string name = a_actorbase.GetFullName();
-		const std::string editorID = Cache::EditorID::GetSingleton()->GetEditorID(a_actorbase.GetFormID());
-
-		if (!strings_NOT.empty()) {
-			bool result = false;
-			if (!name.empty() && detail::name::matches(name, strings_NOT)) {
-				result = true;
-			}
-			if (!result && !editorID.empty() && detail::name::matches(editorID, strings_NOT)) {
-				result = true;
-			}
-			if (!result && detail::keyword::matches(a_actorbase, strings_NOT)) {
-				result = true;
-			}
-			if (result) {
-				return false;
-			}
-		}
-
-		if (!strings_MATCH.empty()) {
-			bool result = false;
-			if (!name.empty() && detail::name::matches(name, strings_MATCH)) {
-				result = true;
-			}
-			if (!result && !editorID.empty() && detail::name::matches(editorID, strings_MATCH)) {
-				result = true;
-			}
-			if (!result && detail::keyword::matches(a_actorbase, strings_MATCH)) {
-				result = true;
-			}
-			if (!result) {
-				return false;
-			}
-		}
-
-		if (!strings_ANY.empty()) {
-			bool result = false;
-			if (!name.empty() && detail::name::contains(name, strings_ANY)) {
-				result = true;
-			}
-			if (!result && !editorID.empty() && detail::name::contains(editorID, strings_ANY)) {
-				result = true;
-			}
-			if (!result && detail::keyword::contains(a_actorbase, strings_ANY)) {
-				result = true;
-			}
-			if (!result) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	inline bool forms(RE::TESNPC& a_actorbase, const FormData& a_formData)
-	{
-		auto& [filterForms_ALL, filterForms_NOT, filterForms_MATCH] = std::get<DATA::TYPE::kFilterForms>(a_formData);
-
-		if (!filterForms_ALL.empty() && !detail::form::matches_ALL(a_actorbase, filterForms_ALL)) {
-			return false;
-		}
-
-		if (!filterForms_NOT.empty() && detail::form::matches(a_actorbase, filterForms_NOT)) {
-			return false;
-		}
-
-		if (!filterForms_MATCH.empty() && !detail::form::matches(a_actorbase, filterForms_MATCH)) {
-			return false;
-		}
-
-		return true;
-	}
-
-	inline bool secondary(const RE::TESNPC& a_actorbase, const FormData& a_formData)
-	{
-		const auto& [sex, isUnique] = std::get<DATA::TYPE::kTraits>(a_formData);
-		if (sex && GetSex(a_actorbase) != *sex) {
-			return false;
-		}
-		if (isUnique && a_actorbase.IsUnique() != *isUnique) {
-			return false;
-		}
-
-		const auto& actorLevelPair = std::get<DATA::TYPE::kLevel>(a_formData);
-
-		if (!a_actorbase.HasPCLevelMult()) {
-			auto& [actorMin, actorMax] = actorLevelPair;
-			const auto actorLevel = a_actorbase.actorData.level;
-
-			if (actorMin < UINT16_MAX && actorMax < UINT16_MAX) {
-				if (actorLevel < actorMin || actorLevel > actorMax) {
-					return false;
-				}
-			} else if (actorMin < UINT16_MAX && actorLevel < actorMin) {
-				return false;
-			} else if (actorMax < UINT16_MAX && actorLevel > actorMax) {
-				return false;
-			}
-		}
-
-		const auto chance = std::get<DATA::TYPE::kChance>(a_formData);
-		if (!numeric::essentially_equal(chance, 100.0)) {
-			if (auto rng = RNG::GetSingleton()->Generate<float>(0.0, 100.0); rng > chance) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-}
+#include "FormData.h"
+#include "LookupNPC.h"
+#include "PCLevelMultManager.h"
 
 namespace Distribute
 {
-	template <class Form>
-	void for_each_form(RE::TESNPC& a_actorbase, Forms::FormMap<Form>& a_formDataMap, std::function<bool(const FormCount<Form>&)> a_fn)
+	namespace detail
 	{
-		for (auto& [form, data] : a_formDataMap.forms) {
-			if (form != nullptr) {
-				auto& [npcCount, formDataVec] = data;
-				for (auto& formData : formDataVec) {
-					if (!Filter::strings(a_actorbase, formData) || !Filter::forms(a_actorbase, formData) || !Filter::secondary(a_actorbase, formData)) {
-						continue;
-					}
-					auto itemCount = std::get<DATA::TYPE::kItemCount>(formData);
-					if (a_fn({ form, itemCount })) {
-						++npcCount;
-					}
-				}
+		template <class Form>
+		bool passed_filters(
+			const NPCData&            a_npcData,
+			const PCLevelMult::Input& a_input,
+			const Forms::Data<Form>&  a_formData)
+		{
+			const auto pcLevelMultManager = PCLevelMult::Manager::GetSingleton();
+
+			const auto hasLevelFilters = a_formData.filters.HasLevelFilters();
+			const auto distributedFormID = a_formData.form->GetFormID();
+			const auto index = a_formData.index;
+
+			if (hasLevelFilters && pcLevelMultManager->FindRejectedEntry(a_input, distributedFormID, index)) {
+				return false;
 			}
+
+			auto result = a_formData.filters.PassedFilters(a_npcData);
+
+			if (result != Filter::Result::kPass) {
+				if (hasLevelFilters && result == Filter::Result::kFailRNG) {
+					pcLevelMultManager->InsertRejectedEntry(a_input, distributedFormID, index);
+				}
+				return false;
+			}
+
+			return true;
 		}
-	}
 
-	template <class Form>
-	void list_npc_count(const std::string& a_type, Forms::FormMap<Form>& a_formDataMap, const size_t a_totalNPCCount)
-	{
-		logger::info("	{}", a_type);
+		template <class Form>
+		bool passed_filters(
+			const NPCData&           a_npcData,
+			const Forms::Data<Form>& a_formData)
+		{
+			return a_formData.filters.PassedFilters(a_npcData) == Filter::Result::kPass;
+		}
 
-		for (auto& [form, formData] : a_formDataMap.forms) {
-			if (form != nullptr) {
-				auto& [npcCount, data] = formData;
-				std::string name;
-				if constexpr (std::is_same_v<Form, RE::BGSKeyword>) {
-					name = form->GetFormEditorID();
+		/// <summary>
+		/// Check that NPC doesn't already have the form that is about to be distributed.
+		/// </summary>
+		template <class Form>
+		bool has_form(RE::TESNPC* a_npc, Form* a_form)
+		{
+			if constexpr (std::is_same_v<RE::TESFaction, Form>) {
+				return a_npc->IsInFaction(a_form);
+			} else if constexpr (std::is_same_v<RE::BGSPerk, Form>) {
+				return a_npc->GetPerkIndex(a_form).has_value();
+			} else if constexpr (std::is_same_v<RE::SpellItem, Form> || std::is_same_v<RE::TESShout, Form> || std::is_same_v<RE::TESLevSpell, Form>) {
+				const auto actorEffects = a_npc->GetSpellList();
+				return actorEffects && actorEffects->GetIndex(a_form).has_value();
+			} else if constexpr (std::is_same_v<RE::TESForm, Form>) {
+				if (a_form->Is(RE::TESPackage::FORM_ID)) {
+					auto  package = a_form->As<RE::TESPackage>();
+					auto& packageList = a_npc->aiPackList.listPackages;
+					return std::ranges::find(packageList, package) != packageList.end();
 				} else {
-					name = Cache::EditorID::GetSingleton()->GetEditorID(form->GetFormID());
+					return false;
 				}
-				logger::info("		{} [0x{:X}] added to {}/{} NPCs", name, form->GetFormID(), npcCount, a_totalNPCCount);
+			} else {
+				return false;
 			}
 		}
 	}
 
-	void Distribute(RE::TESNPC* a_actorbase);
+	using namespace Forms;
 
-	class DeathItemManager : public RE::BSTEventSink<RE::TESDeathEvent>
+#pragma region Packages
+	// old method (distributing one by one)
+	// for now, only packages use this
+	template <class Form>
+	void for_each_form(
+		const NPCData&                           a_npcData,
+		Forms::DataVec<Form>&                    forms,
+		const PCLevelMult::Input&                a_input,
+		std::function<void(Form*, IndexOrCount)> a_callback,
+		DistributedForms*                        accumulatedForms = nullptr)
 	{
-	public:
-		static DeathItemManager* GetSingleton()
-		{
-			static DeathItemManager singleton;
-			return &singleton;
+		for (auto& formData : forms) {
+			if (!a_npcData.HasMutuallyExclusiveForm(formData.form) && detail::passed_filters(a_npcData, a_input, formData)) {
+				if (accumulatedForms) {
+					accumulatedForms->insert({ formData.form, formData.path });
+				}
+				a_callback(formData.form, formData.idxOrCount);
+				++formData.npcCount;
+			}
+		}
+	}
+#pragma endregion
+
+#pragma region Outfits, Sleep Outfits, Skins
+	template <class Form>
+	void for_each_form(
+		const NPCData&             a_npcData,
+		Forms::DataVec<Form>&      forms,
+		const PCLevelMult::Input&  a_input,
+		std::function<bool(Form*)> a_callback,
+		DistributedForms*          accumulatedForms = nullptr)
+	{
+		for (auto& formData : forms) {  // Vector is reversed in FinishLookupForms
+			if (!a_npcData.HasMutuallyExclusiveForm(formData.form) && detail::passed_filters(a_npcData, a_input, formData) && a_callback(formData.form)) {
+				if (accumulatedForms) {
+					accumulatedForms->insert({ formData.form, formData.path });
+				}
+				++formData.npcCount;
+				break;
+			}
+		}
+	}
+#pragma endregion
+
+#pragma region Items
+	// countable items
+	template <class Form>
+	void for_each_form(
+		const NPCData&                               a_npcData,
+		Forms::DataVec<Form>&                        forms,
+		const PCLevelMult::Input&                    a_input,
+		std::function<bool(std::map<Form*, Count>&)> a_callback,
+		DistributedForms*                            accumulatedForms = nullptr)
+	{
+		std::map<Form*, Count> collectedForms{};
+
+		for (auto& formData : forms) {
+			if (!a_npcData.HasMutuallyExclusiveForm(formData.form) && detail::passed_filters(a_npcData, a_input, formData)) {
+				// TODO: Safe guard getting RandomCount and if for any reason there is a PackageIndex, default it to count = 1
+				auto count = std::get<RandomCount>(formData.idxOrCount).GetRandom();
+				if (auto leveledItem = formData.form->As<RE::TESLevItem>()) {
+					auto                                level = a_npcData.GetLevel();
+					RE::BSScrapArray<RE::CALCED_OBJECT> calcedObjects{};
+
+					leveledItem->CalculateCurrentFormList(level, static_cast<std::uint16_t>(count), calcedObjects);
+					for (auto& calcObj : calcedObjects) {
+						collectedForms[calcObj.object] += calcObj.count;
+						if (accumulatedForms) {
+							accumulatedForms->insert({ calcObj.object, formData.path });
+						}
+					}
+				} else {
+					collectedForms[formData.form] += count;
+					if (accumulatedForms) {
+						accumulatedForms->insert({ formData.form, formData.path });
+					}
+				}
+				++formData.npcCount;
+			}
 		}
 
-		static void Register();
+		if (!collectedForms.empty()) {
+			a_callback(collectedForms);
+		}
+	}
+#pragma endregion
 
-	protected:
-		using EventResult = RE::BSEventNotifyControl;
+#pragma region Spells, Perks, Shouts, Keywords
+	// spells, perks, shouts, keywords
+	// forms that can be added to
+	template <class Form>
+	void for_each_form(
+		NPCData&                                       a_npcData,
+		Forms::DataVec<Form>&                          forms,
+		const PCLevelMult::Input&                      a_input,
+		std::function<void(const std::vector<Form*>&)> a_callback,
+		DistributedForms*                              accumulatedForms = nullptr)
+	{
+		const auto npc = a_npcData.GetNPC();
 
-	    struct detail  //AddObjectToContainer doesn't work with leveled items :s
-		{
-			static void add_item(RE::Actor* a_actor, RE::TESBoundObject* a_item, std::uint32_t a_itemCount, bool a_silent, std::uint32_t a_stackID, RE::BSScript::IVirtualMachine* a_vm)
-			{
-				using func_t = decltype(&detail::add_item);
-				REL::Relocation<func_t> func{ REL::ID(991278) };
-				return func(a_actor, a_item, a_itemCount, a_silent, a_stackID, a_vm);
+		std::vector<Form*> collectedForms{};
+		Set<RE::FormID>    collectedFormIDs{};
+		Set<RE::FormID>    collectedLeveledFormIDs{};
+
+		collectedForms.reserve(forms.size());
+		collectedFormIDs.reserve(forms.size());
+		collectedLeveledFormIDs.reserve(forms.size());
+
+		for (auto& formData : forms) {
+			auto form = formData.form;
+			auto formID = form->GetFormID();
+			if (collectedFormIDs.contains(formID)) {
+				continue;
 			}
-		};
+			if constexpr (std::is_same_v<RE::BGSKeyword, Form>) {
+				if (!a_npcData.HasMutuallyExclusiveForm(form) && detail::passed_filters(a_npcData, a_input, formData) && a_npcData.InsertKeyword(form->GetFormEditorID())) {
+					collectedForms.emplace_back(form);
+					collectedFormIDs.emplace(formID);
+					if (formData.filters.HasLevelFilters()) {
+						collectedLeveledFormIDs.emplace(formID);
+					}
+					if (accumulatedForms) {
+						accumulatedForms->insert({ form, formData.path });
+					}
+					++formData.npcCount;
+				}
+			} else {
+				if (!a_npcData.HasMutuallyExclusiveForm(form) && detail::passed_filters(a_npcData, a_input, formData) && !detail::has_form(npc, form) && collectedFormIDs.emplace(formID).second) {
+					collectedForms.emplace_back(form);
+					if (formData.filters.HasLevelFilters()) {
+						collectedLeveledFormIDs.emplace(formID);
+					}
+					if (accumulatedForms) {
+						accumulatedForms->insert({ form, formData.path });
+					}
+					++formData.npcCount;
+				}
+			}
+		}
 
-	    EventResult ProcessEvent(const RE::TESDeathEvent& a_event, RE::BSTEventSource<RE::TESDeathEvent>*) override;
-
-	private:
-		DeathItemManager() = default;
-		DeathItemManager(const DeathItemManager&) = delete;
-		DeathItemManager(DeathItemManager&&) = delete;
-
-		~DeathItemManager() override = default;
-
-		DeathItemManager& operator=(const DeathItemManager&) = delete;
-		DeathItemManager& operator=(DeathItemManager&&) = delete;
-	};
-
-	namespace Actor
-	{
-		void Install();
+		if (!collectedForms.empty()) {
+			a_callback(collectedForms);
+			if (!collectedLeveledFormIDs.empty()) {
+				PCLevelMult::Manager::GetSingleton()->InsertDistributedEntry(a_input, Form::FORM_ID, collectedLeveledFormIDs);
+			}
+		}
 	}
+#pragma endregion
 
-    namespace LeveledActor
-	{
-		void Install();
-	}
-
-	void ApplyToNPCs();
+	/// <summary>
+	/// Performs distribution of all configured forms to NPC described with npcData and input.
+	/// </summary>
+	/// <param name="npcData">General information about NPC that is being processed.</param>
+	/// <param name="input">Leveling information about NPC that is being processed.</param>
+	/// <param name="forms">A set of forms that should be distributed to NPC.</param>
+	/// <param name="allowOverwrites">If true, overwritable forms (like Outfits) will be to overwrite last distributed form on NPC.</param>
+	/// <param name="accumulatedForms">An optional pointer to a set that will accumulate all distributed forms.</param>
+	void Distribute(NPCData& npcData, const PCLevelMult::Input& input, Forms::DistributionSet& forms, bool allowOverwrites, DistributedForms* accumulatedForms = nullptr);
+	void Distribute(NPCData& npcData, const PCLevelMult::Input& input);
+	void Distribute(NPCData& npcData, bool onlyLeveledEntries);
 }

@@ -1,119 +1,154 @@
 #pragma once
 
-namespace RECORD
+// Record = FormOrEditorID|StringFilters|RawFormFilters|LevelFilters|Traits|IdxOrCount|Chance
+
+using FormModPair = std::pair<
+	std::optional<RE::FormID>,    // formID
+	std::optional<std::string>>;  // modName
+
+using FormOrEditorID = std::variant<
+	FormModPair,   // formID~modName
+	std::string>;  // editorID
+
+template <class T>
+struct Filters
 {
-	enum TYPE
-	{
-		kSpell = 0,
-		kPerk,
-		kItem,
-		kLevSpell,
-		kPackage,
-		kOutfit,
-		kKeyword,
-		kDeathItem,
-		kFaction,
+	std::vector<T> ALL{};
+	std::vector<T> NOT{};
+	std::vector<T> MATCH{};
+};
 
-		kTotal
-	};
-
-	inline constexpr std::array add { "Spell", "Perk", "Item", "LevSpell", "Package", "Outfit", "Keyword", "DeathItem", "Faction" };
-	inline constexpr std::array remove { "-Spell", "-Perk", "-Item", "-LevSpell", "-Package", "-Outfit", "-Keyword", "-DeathItem", "-Faction" };
-}
-
-namespace TRAITS
-{
-	enum : std::uint32_t
-	{
-		kSex,
-		kUnique
-	};
-}
-
-namespace INI
-{
-	enum TYPE : std::uint32_t
-	{
-		kFormIDPair = 0,
-		kFormID = kFormIDPair,
-		kStrings,
-		kESP = kStrings,
-		kFilterIDs,
-		kLevel,
-		kTraits,
-		kItemCount,
-		kChance
-	};
-
-	using Values = std::vector<std::pair<std::string, std::string>>;
-
-	inline bool is_mod_name(const std::string& a_str)
-	{
-		return a_str.rfind(".esp") != std::string::npos || a_str.rfind(".esl") != std::string::npos || a_str.rfind(".esm") != std::string::npos;
-	}
-}
-
-namespace DATA
-{
-	enum TYPE : std::uint32_t
-	{
-		kStrings = 0,
-		kFilterForms,
-		kLevel,
-		kTraits,
-		kChance,
-		kItemCount
-	};
-}
-
-using FormIDPair = std::pair<
-	std::optional<RE::FormID>,
-	std::optional<std::string>>;
-using FormIDPairVec = std::vector<FormIDPair>;
 using StringVec = std::vector<std::string>;
-using FormVec = std::vector<
-	std::variant<RE::TESForm*, const RE::TESFile*>>;
-using FormOrEditorID = std::variant<FormIDPair, std::string>;
-
-using ActorLevel = std::pair<std::uint16_t, std::uint16_t>;
-
-//unused
-using SkillLevel = std::pair<
-	std::uint32_t,
-	std::pair<std::uint8_t, std::uint8_t>>;
-
-using ItemCount = std::int32_t;
-using Traits = std::tuple<
-    std::optional<RE::SEX>,
-	std::optional<bool>>;
-using Chance = float;
-using NPCCount = std::uint32_t;
-
-using INIData = std::tuple<
-	std::array<StringVec, 4>,
-	std::array<FormIDPairVec, 3>,
-	ActorLevel,
-	Traits,
-	ItemCount,
-	Chance>;
-using INIDataMap = std::map<FormOrEditorID, std::vector<INIData>>;
-
-using FormData = std::tuple<
-	std::array<StringVec, 4>,
-	std::array<FormVec, 3>,
-	ActorLevel,
-	Traits,
-	Chance,
-	ItemCount>;
-template <class T>
-using FormCount = std::pair<T*, ItemCount>;
-template <class T>
-using FormDataMap = std::unordered_map<T*, std::pair<NPCCount, std::vector<FormData>>>;
-
-namespace RE
+struct StringFilters : Filters<std::string>
 {
-	inline SEX GetSex(const TESNPC& a_npc)
+	StringVec ANY{};
+};
+
+using RawFormVec = std::vector<FormOrEditorID>;
+using RawFormFilters = Filters<FormOrEditorID>;
+
+using FormOrMod = std::variant<RE::TESForm*,  // form
+	const RE::TESFile*>;                      // mod
+using FormVec = std::vector<FormOrMod>;
+using FormFilters = Filters<FormOrMod>;
+
+template <typename T>
+struct Range
+{
+	Range() = default;
+
+	explicit Range(T a_min) :
+		min(a_min)
+	{}
+	Range(T a_min, T a_max) :
+		min(a_min),
+		max(a_max)
+	{}
+
+	[[nodiscard]] bool IsValid() const
 	{
-		return a_npc.IsFemale() ? SEX::kFemale : SEX::kMale;
+		return min > std::numeric_limits<T>::min();  // min must always be valid, max is optional
 	}
+	[[nodiscard]] bool IsInRange(T value) const
+	{
+		return value >= min && value <= max;
+	}
+
+	[[nodiscard]] bool IsExact() const
+	{
+		return min == max;
+	}
+
+	[[nodiscard]] T GetRandom() const
+	{
+		return IsExact() ? min : RNG().generate<T>(min, max);
+	}
+
+	// members
+	T min{ std::numeric_limits<T>::min() };
+	T max{ std::numeric_limits<T>::max() };
+};
+
+// skill type, skill Level
+struct ActorValue
+{
+	std::variant<FormOrEditorID, RE::ActorValueInfo*> type;
+	Range<std::uint8_t> range;
+};
+
+struct LevelFilters
+{
+	Range<std::uint16_t> actorLevel{};
+	std::vector<ActorValue> avLevels{};
+};
+
+struct Traits
+{
+	std::optional<RE::SEX> sex{};
+	std::optional<bool>    unique{};
+	std::optional<bool>    summonable{};
+	std::optional<bool>    child{};
+	std::optional<bool>    leveled{};
+};
+
+using Path = std::string;
+
+using Index = std::int32_t;
+using Count = std::int32_t;
+using RandomCount = Range<Count>;
+using IndexOrCount = std::variant<Index, RandomCount>;
+
+/// <summary>
+/// A chance that is represented as a decimal value between 0 and 1.
+/// For example, 0.5 would be 50%.
+///
+/// This one is used in a processed Data for filtering.
+/// </summary>
+using DecimalChance = double;
+
+/// <summary>
+/// A chance that is represented as a percent value between 0 and 100.
+/// It also can be decimal, but would describe fraction of a percent.
+/// So that 0.5 would be 0.5%.
+///
+/// This is used during parsing of INI files.
+/// </summary>
+using PercentChance = double;
+
+/// A standardized way of converting any object to string.
+///
+///	<p>
+///	Overload `operator<<` to provide custom formatting for your value.
+///	Alternatively, specialize this method and provide your own implementation.
+///	</p>
+template <typename Value>
+std::string describe(Value value)
+{
+	std::ostringstream os;
+	os << value;
+	return os.str();
+}
+
+inline std::ostream& operator<<(std::ostream& os, RE::TESFile* file)
+{
+	os << file->filename;
+	return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, RE::TESForm* form)
+{
+	if (std::string edid = form->GetFormEditorID(); !edid.empty()) {
+		os << edid << " ";
+	}
+	os << "["
+	   << std::to_string(form->GetFormType())
+	   << ":"
+	   << std::setfill('0')
+	   << std::setw(sizeof(RE::FormID) * 2)
+	   << std::uppercase
+	   << std::hex
+	   << form->GetFormID()
+	   << "]";
+
+	return os;
 }

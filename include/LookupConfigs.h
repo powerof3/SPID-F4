@@ -1,201 +1,516 @@
 #pragma once
 
-namespace INI
+namespace RECORD
 {
-	inline std::unordered_map<std::string, INIDataMap> configs;
+	enum TYPE
+	{
+		/// <summary>
+		/// A generic form type that requries type inference.
+		/// </summary>
+		kForm = 0,
+
+		kSpell,
+		kPerk,
+		kItem,
+		kShout,
+		kLevSpell,
+		kPackage,
+		kOutfit,
+		kKeyword,
+		kDeathItem,
+		kFaction,
+		kSleepOutfit,
+		kSkin,
+
+		kTotal
+	};
 
 	namespace detail
 	{
-		inline std::vector<std::string> split_sub_string(const std::string& a_str, const std::string& a_delimiter = ",")
-		{
-			if (!a_str.empty() && !a_str.contains("NONE"sv)) {
-				return string::split(a_str, a_delimiter);
-			}
-			return std::vector<std::string>();
-		}
-
-		inline FormIDPair get_formID(const std::string& a_str)
-		{
-			if (a_str.contains("~"sv)) {
-				auto splitID = string::split(a_str, "~");
-				return std::make_pair(
-					string::lexical_cast<RE::FormID>(splitID.at(kFormID), true),
-					splitID.at(kESP));
-			}
-			if (is_mod_name(a_str) || !string::is_only_hex(a_str)) {
-				return std::make_pair(
-					std::nullopt,
-					a_str);
-			}
-			return std::make_pair(
-				string::lexical_cast<RE::FormID>(a_str, true),
-				std::nullopt);
-		}
-
-		inline std::string sanitize(const std::string& a_value)
-		{
-			auto newValue = a_value;
-
-			//strip spaces between " ~ "
-			string::replace_all(newValue, " ~ ", "~");
-
-			//strip spaces between " | "
-			static const srell::regex re_bar(R"(\s*\|\s*)");
-			newValue = srell::regex_replace(newValue, re_bar, "|");
-
-			//strip spaces between " , "
-			static const srell::regex re_comma(R"(\s*,\s*)");
-			newValue = srell::regex_replace(newValue, re_comma, ",");
-
-			//strip leading zeros
-			static const srell::regex re_zeros(R"((0x00+)([0-9a-fA-F]+))");
-			newValue = srell::regex_replace(newValue, re_zeros, "0x$2");
-
-			return newValue;
-		}
+		inline static constexpr std::array names{
+			"Form"sv,
+			"Spell"sv,
+			"Perk"sv,
+			"Item"sv,
+			"Shout"sv,
+			"LevSpell"sv,
+			"Package"sv,
+			"Outfit"sv,
+			"Keyword"sv,
+			"DeathItem"sv,
+			"Faction"sv,
+			"SleepOutfit"sv,
+			"Skin"sv
+		};
 	}
 
-	inline std::tuple<FormOrEditorID, INIData, std::optional<std::string>> parse_ini(const std::string& a_value)
+	inline constexpr std::string_view GetTypeName(const TYPE aType)
 	{
-		FormOrEditorID recordID;
-
-		INIData data;
-		auto& [strings_ini, filterIDs_ini, level_ini, traits_ini, itemCount_ini, chance_ini] = data;
-
-		auto sanitized_value = detail::sanitize(a_value);
-		const auto sections = string::split(sanitized_value, "|");
-
-	    auto size = sections.size();
-
-		//[FORMID/ESP] / EDITORID
-		if (kFormID < size) {
-			auto& formSection = sections[kFormID];
-			if (formSection.contains('~') || string::is_only_hex(formSection)) {
-				FormIDPair pair;
-				pair.second = std::nullopt;
-
-				if (string::is_only_hex(formSection)) {
-					// formID
-					pair.first = string::lexical_cast<RE::FormID>(formSection, true);
-				} else {
-					// formID~esp
-					pair = detail::get_formID(formSection);
-				}
-
-				recordID.emplace<FormIDPair>(pair);
-			} else {
-				recordID.emplace<std::string>(formSection);
-			}
-		} else {
-			FormIDPair pair = { 0, std::nullopt };
-			recordID.emplace<FormIDPair>(pair);
-		}
-
-		//KEYWORDS
-		if (kStrings < size) {
-			auto& [strings_ALL, strings_NOT, strings_MATCH, strings_ANY] = strings_ini;
-
-			auto split_str = detail::split_sub_string(sections[kStrings]);
-			for (auto& str : split_str) {
-				if (str.contains("+"sv)) {
-					auto strings = detail::split_sub_string(str, "+");
-					strings_ALL.insert(strings_ALL.end(), strings.begin(), strings.end());
-
-				} else if (str.at(0) == '-') {
-					str.erase(0, 1);
-					strings_NOT.emplace_back(str);
-
-				} else if (str.at(0) == '*') {
-					str.erase(0, 1);
-					strings_ANY.emplace_back(str);
-
-				} else {
-					strings_MATCH.emplace_back(str);
-				}
-			}
-		}
-
-		//FILTER FORMS
-		if (kFilterIDs < size) {
-			auto& [filterIDs_ALL, filterIDs_NOT, filterIDs_MATCH] = filterIDs_ini;
-
-			auto split_IDs = detail::split_sub_string(sections[kFilterIDs]);
-			for (auto& IDs : split_IDs) {
-				if (IDs.contains("+"sv)) {
-					auto splitIDs_ALL = detail::split_sub_string(IDs, "+");
-					for (auto& IDs_ALL : splitIDs_ALL) {
-						filterIDs_ALL.push_back(detail::get_formID(IDs_ALL));
-					}
-				} else if (IDs.at(0) == '-') {
-					IDs.erase(0, 1);
-					filterIDs_NOT.push_back(detail::get_formID(IDs));
-
-				} else {
-					filterIDs_MATCH.push_back(detail::get_formID(IDs));
-				}
-			}
-		}
-
-		//LEVEL
-		ActorLevel actorLevelPair = { UINT16_MAX, UINT16_MAX };
-		if (kLevel < size) {
-			auto split_levels = detail::split_sub_string(sections[kLevel], "/");
-			if (!split_levels.empty()) {
-				if (split_levels.size() > 1) {
-					auto minLevel = string::lexical_cast<std::uint16_t>(split_levels[0]);
-					auto maxLevel = string::lexical_cast<std::uint16_t>(split_levels[1]);
-
-					actorLevelPair = { minLevel, maxLevel };
-				} else {
-					auto level = string::lexical_cast<std::uint16_t>(split_levels[0]);
-
-					actorLevelPair = { level, UINT16_MAX };
-				}
-			}
-		}
-		level_ini = actorLevelPair;
-
-		//TRAITS
-		if (kTraits < size) {
-			auto& [sex, unique] = traits_ini;
-
-			auto split_traits = detail::split_sub_string(sections[kTraits], "/");
-			for (auto& trait : split_traits) {
-				if (trait == "M") {
-					sex = RE::SEX::kMale;
-				} else if (trait == "F") {
-					sex = RE::SEX::kFemale;
-				} else if (trait == "U") {
-					unique = true;
-				} else if (trait == "-U") {
-					unique = false;
-				}
-			}
-		}
-
-		//ITEMCOUNT
-		itemCount_ini = 1;
-		if (kItemCount < size) {
-		    const auto& itemCountStr = sections[kItemCount];
-		    if (!itemCountStr.empty() && !itemCountStr.contains("NONE"sv)) {
-				itemCount_ini = string::lexical_cast<std::int32_t>(itemCountStr);
-			}
-		}
-
-		//CHANCE
-		chance_ini = 100;
-		if (kChance < size) {
-			const auto& chanceStr = sections[kChance];
-			if (!chanceStr.empty() && !chanceStr.contains("NONE"sv)) {
-				chance_ini = string::lexical_cast<float>(chanceStr);
-			}
-		}
-
-		if (sanitized_value != a_value) {
-			return std::make_tuple(recordID, data, sanitized_value);
-		}
-		return std::make_tuple(recordID, data, std::nullopt);
+		return detail::names.at(aType);
 	}
 
-	bool Read();
+	template <typename T>
+	constexpr TYPE GetType(const T& aType)
+	{
+		using namespace detail;
+		return static_cast<TYPE>(std::distance(names.begin(), std::find(names.begin(), names.end(), aType)));
+	}
+}
+
+namespace Distribution
+{
+	namespace INI
+	{
+		struct Data
+		{
+			RECORD::TYPE   type{ RECORD::TYPE::kForm };
+			FormOrEditorID rawForm{};
+			StringFilters  stringFilters{};
+			RawFormFilters formFilters{};
+			LevelFilters   levelFilters{};
+			Traits         traits{};
+			IndexOrCount   idxOrCount{ RandomCount(1, 1) };
+			PercentChance  chance{ 100 };
+			std::string    path{};
+		};
+
+		using DataVec = std::vector<Data>;
+
+		inline Map<RECORD::TYPE, DataVec> configs{};
+
+		std::pair<bool, bool> GetConfigs();
+	}
+}
+
+namespace Distribution::INI
+{
+	namespace Exception
+	{
+		struct UnsupportedFormTypeException : std::exception
+		{
+			const std::string key;
+
+			UnsupportedFormTypeException(const std::string& key) :
+				std::exception(fmt::format("Unsupported form type {}"sv, key).c_str()),
+				key(key)
+			{}
+		};
+
+		struct InvalidIndexOrCountException : std::exception
+		{
+			const std::string entry;
+
+			InvalidIndexOrCountException(const std::string& entry) :
+				std::exception(fmt::format("Invalid index or count {}"sv, entry).c_str()),
+				entry(entry)
+			{}
+		};
+
+		struct InvalidChanceException : std::exception
+		{
+			const std::string entry;
+
+			InvalidChanceException(const std::string& entry) :
+				std::exception(fmt::format("Invalid chance {}"sv, entry).c_str()),
+				entry(entry)
+			{}
+		};
+
+		struct MissingDistributableFormException : std::exception
+		{
+			MissingDistributableFormException() :
+				std::exception("Missing distributable form")
+			{}
+		};
+
+		struct MissingComponentParserException : std::exception
+		{
+			MissingComponentParserException() :
+				std::exception("Missing component parser")
+			{}
+		};
+	}
+
+	namespace concepts
+	{
+		template <typename Data>
+		concept typed_data = requires(Data data) {
+			{
+				data.type
+			} -> std::same_as<RECORD::TYPE&>;
+			{
+				data.type = std::declval<RECORD::TYPE>()
+			};
+		};
+
+		template <typename Data>
+		concept form_data = requires(Data data) {
+			{
+				data.rawForm
+			} -> std::same_as<FormOrEditorID&>;
+			{
+				data.rawForm = std::declval<FormOrEditorID>()
+			};
+		};
+
+		template <typename Data>
+		concept string_filterable_data = requires(Data data) {
+			{
+				data.stringFilters
+			} -> std::same_as<StringFilters&>;
+			{
+				data.stringFilters = std::declval<StringFilters>()
+			};
+		};
+
+		template <typename Data>
+		concept form_filterable_data = requires(Data data) {
+			{
+				data.formFilters
+			} -> std::same_as<RawFormFilters&>;
+			{
+				data.formFilters = std::declval<RawFormFilters>()
+			};
+		};
+
+		template <typename Data>
+		concept level_filterable_data = requires(Data data) {
+			{
+				data.levelFilters
+			} -> std::same_as<LevelFilters&>;
+			{
+				data.levelFilters = std::declval<LevelFilters>()
+			};
+		};
+
+		template <typename Data>
+		concept trait_filterable_data = requires(Data data) {
+			{
+				data.traits
+			} -> std::same_as<Traits&>;
+			{
+				data.traits = std::declval<Traits>()
+			};
+		};
+
+		template <typename Data>
+		concept countable_data = requires(Data data) {
+			{
+				data.idxOrCount
+			} -> std::same_as<IndexOrCount&>;
+			{
+				data.idxOrCount = std::declval<IndexOrCount>()
+			};
+		};
+
+		template <typename Data>
+		concept randomized_data = requires(Data data) {
+			{
+				data.chance
+			} -> std::same_as<PercentChance&>;
+			{
+				data.chance = std::declval<PercentChance>()
+			};
+		};
+	}
+
+	using namespace concepts;
+
+	enum ComponentParserFlags : std::uint8_t
+	{
+		kNone = 0,
+		kRequired = 1,
+
+		// Modifiers used by Filters that support them
+
+		kAllowCombineModifier = 1 << 2,
+		kAllowExclusionModifier = 1 << 3,
+		kAllowPartialMatchModifier = 1 << 4,
+
+		kAllowAllModifiers = kAllowCombineModifier | kAllowExclusionModifier | kAllowPartialMatchModifier,
+
+		// Default modifiers suitable for FormFilters
+		kAllowFormsModifiers = kAllowCombineModifier | kAllowExclusionModifier
+	};
+
+	constexpr ComponentParserFlags operator|(ComponentParserFlags lhs, ComponentParserFlags rhs)
+	{
+		return ComponentParserFlags(std::uint8_t(lhs) | std::uint8_t(rhs));
+	}
+
+	/// <summary>
+	/// Simply parses type of the record from the key.
+	/// Always returns true and doesn't prevent further parsing.
+	/// </summary>
+	struct DefaultKeyComponentParser
+	{
+		template <typed_data Data>
+		bool operator()(const std::string& key, Data& data) const;
+	};
+
+	struct DistributableFormComponentParser
+	{
+		template <form_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+
+	template <ComponentParserFlags flags = kAllowAllModifiers>
+	struct StringFiltersComponentParser
+	{
+		template <string_filterable_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+
+	template <ComponentParserFlags flags = kAllowFormsModifiers>
+	struct FormFiltersComponentParser
+	{
+		template <form_filterable_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+
+	struct LevelFiltersComponentParser
+	{
+		template <level_filterable_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+
+	struct TraitsFilterComponentParser
+	{
+		template <trait_filterable_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+
+	struct IndexOrCountComponentParser
+	{
+		template <countable_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+
+	struct ChanceComponentParser
+	{
+		template <randomized_data Data>
+		void operator()(const std::string& entry, Data& data) const;
+	};
+}
+
+namespace Distribution::INI
+{
+	using namespace Exception;
+
+	template <typed_data Data>
+	bool DefaultKeyComponentParser::operator()(const std::string& key, Data& data) const
+	{
+		auto type = RECORD::GetType(key);
+		if (type == RECORD::kTotal) {
+			throw UnsupportedFormTypeException(key);
+		}
+
+		data.type = type;
+		return true;
+	}
+
+	template <form_data Data>
+	void DistributableFormComponentParser::operator()(const std::string& entry, Data& data) const
+	{
+		if (entry.empty()) {
+			throw MissingDistributableFormException();
+		}
+
+		data.rawForm = distribution::get_record(entry);
+	}
+
+	template <ComponentParserFlags flags>
+	template <string_filterable_data Data>
+	void StringFiltersComponentParser<flags>::operator()(const std::string& entry, Data& data) const
+	{
+		auto split_str = distribution::split_entry(entry);
+		for (auto& str : split_str) {
+			if constexpr (flags & kAllowCombineModifier) {
+				if (str.contains("+"sv)) {
+					auto strings = distribution::split_entry(str, "+");
+					data.stringFilters.ALL.insert(data.stringFilters.ALL.end(), strings.begin(), strings.end());
+					continue;
+				}
+			}
+			if constexpr (flags & kAllowExclusionModifier) {
+				if (str.at(0) == '-') {
+					str.erase(0, 1);
+					data.stringFilters.NOT.emplace_back(str);
+					continue;
+				}
+			}
+			if constexpr (flags & kAllowPartialMatchModifier) {
+				if (str.at(0) == '*') {
+					str.erase(0, 1);
+					data.stringFilters.ANY.emplace_back(str);
+					continue;
+				}
+			}
+
+			data.stringFilters.MATCH.emplace_back(str);
+		}
+	}
+
+	template <ComponentParserFlags flags>
+	template <form_filterable_data Data>
+	void FormFiltersComponentParser<flags>::operator()(const std::string& entry, Data& data) const
+	{
+		auto split_IDs = distribution::split_entry(entry);
+
+		if (split_IDs.empty()) {
+			if constexpr (flags & ComponentParserFlags::kRequired) {
+				throw MissingComponentParserException();
+			}
+			return;
+		}
+
+		for (auto& IDs : split_IDs) {
+			if constexpr (flags & kAllowCombineModifier) {
+				if (IDs.contains("+"sv)) {
+					auto splitIDs_ALL = distribution::split_entry(IDs, "+");
+					for (auto& IDs_ALL : splitIDs_ALL) {
+						data.formFilters.ALL.push_back(distribution::get_record(IDs_ALL));
+					}
+					continue;
+				}
+			}
+
+			if constexpr (flags & kAllowExclusionModifier) {
+				if (IDs.at(0) == '-') {
+					IDs.erase(0, 1);
+					data.formFilters.NOT.push_back(distribution::get_record(IDs));
+					continue;
+				}
+			}
+
+			data.formFilters.MATCH.push_back(distribution::get_record(IDs));
+		}
+	}
+
+	template <level_filterable_data Data>
+	void LevelFiltersComponentParser::operator()(const std::string& entry, Data& data) const
+	{
+		Range<std::uint16_t>    actorLevel;
+		std::vector<ActorValue> avLevels;
+		auto                    split_levels = distribution::split_entry(entry, ",");
+		for (auto& levels : split_levels) {
+			if (levels.contains('(')) {
+				//skill(min/max)
+				auto sanitizedLevel = string::remove_non_alphanumeric(levels);
+				//skill min max
+				if (auto skills = string::split(sanitizedLevel, " "); !skills.empty()) {
+					auto type = distribution::get_record(skills[0]);
+					auto minLevel = string::to_num<std::uint8_t>(skills[1]);
+					
+					if (skills.size() > 2) {
+						auto maxLevel = string::to_num<std::uint8_t>(skills[2]);
+						avLevels.push_back({ type, Range(minLevel, maxLevel) });
+					} else {
+						// Single value is treated as exact match.
+						avLevels.push_back({ type, Range(minLevel) });
+					}
+				}
+			} else {
+				if (auto actor_level = string::split(levels, "/"); actor_level.size() > 1) {
+					auto minLevel = string::to_num<std::uint16_t>(actor_level[0]);
+					auto maxLevel = string::to_num<std::uint16_t>(actor_level[1]);
+
+					actorLevel = Range(minLevel, maxLevel);
+				} else {
+					auto level = string::to_num<std::uint16_t>(levels);
+
+					actorLevel = Range(level);
+				}
+			}
+		}
+		data.levelFilters = { actorLevel, avLevels };
+	}
+
+	template <trait_filterable_data Data>
+	void TraitsFilterComponentParser::operator()(const std::string& entry, Data& data) const
+	{
+		auto split_traits = distribution::split_entry(entry, "/");
+		for (auto& trait : split_traits) {
+			switch (string::const_hash(trait)) {
+			case "M"_h:
+			case "-F"_h:
+				data.traits.sex = RE::SEX::kMale;
+				break;
+			case "F"_h:
+			case "-M"_h:
+				data.traits.sex = RE::SEX::kFemale;
+				break;
+			case "U"_h:
+				data.traits.unique = true;
+				break;
+			case "-U"_h:
+				data.traits.unique = false;
+				break;
+			case "S"_h:
+				data.traits.summonable = true;
+				break;
+			case "-S"_h:
+				data.traits.summonable = false;
+				break;
+			case "C"_h:
+				data.traits.child = true;
+				break;
+			case "-C"_h:
+				data.traits.child = false;
+				break;
+			case "L"_h:
+				data.traits.leveled = true;
+				break;
+			case "-L"_h:
+				data.traits.leveled = false;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
+	template <countable_data Data>
+	void IndexOrCountComponentParser::operator()(const std::string& entry, Data& data) const
+	{
+		auto typeHint = data.type;
+
+		if (typeHint == RECORD::kPackage) {  // reuse item count for package stack index
+			data.idxOrCount = 0;
+		}
+
+		if (!distribution::is_valid_entry(entry)) {
+			return;
+		}
+		try {
+			if (typeHint == RECORD::kPackage) {  // If it's a package, then we only expect a single number.
+				data.idxOrCount = string::to_num<Index>(entry);
+			} else {
+				if (auto countPair = string::split(entry, "-"); countPair.size() > 1) {
+					auto minCount = string::to_num<Count>(countPair[0]);
+					auto maxCount = string::to_num<Count>(countPair[1]);
+
+					data.idxOrCount = RandomCount(minCount, maxCount);
+				} else {
+					auto count = string::to_num<Count>(entry);
+
+					data.idxOrCount = RandomCount(count, count);  // create the exact match range.
+				}
+			}
+		} catch ([[maybe_unused]] const std::exception& e) {
+			throw InvalidIndexOrCountException(entry);
+		}
+	}
+
+	template <randomized_data Data>
+	void ChanceComponentParser::operator()(const std::string& entry, Data& data) const
+	{
+		if (distribution::is_valid_entry(entry)) {
+			try {
+				data.chance = string::to_num<PercentChance>(entry);
+			} catch (const std::exception&) {
+				throw InvalidChanceException(entry);
+			}
+		}
+	}
 }

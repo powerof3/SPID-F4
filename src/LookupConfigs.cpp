@@ -1,70 +1,156 @@
 #include "LookupConfigs.h"
+#include "DeathDistribution.h"
+#include "ExclusiveGroups.h"
+#include "LinkedDistribution.h"
+#include "Parser.h"
 
-bool INI::Read()
+namespace Distribution
 {
-	logger::info("{:*^30}", "INI");
+	namespace INI
+	{
+		namespace detail
+		{
+			std::string sanitize(const std::string& a_value)
+			{
+				auto newValue = a_value;
 
-	std::vector<std::string> files;
+				//formID hypen
+				if (!newValue.contains('~')) {
+					string::replace_first_instance(newValue, " - ", "~");
+				}
 
-	auto constexpr folder = R"(Data\)";
-	for (const auto& entry : std::filesystem::directory_iterator(folder)) {
-		if (entry.exists() && !entry.path().empty() && entry.path().extension() == ".ini"sv) {
-			if (const auto path = entry.path().string(); path.rfind("_DISTR") != std::string::npos) {
-				files.push_back(path);
+#ifdef SKYRIMVR
+				// swap dawnguard and dragonborn forms
+				// we do this during sanitize instead of in get_formID to squelch log errors
+				// VR apparently does not load masters in order so the lookup fails
+				static const srell::regex re_dawnguard(R"((0x0*2)([0-9a-f]{6}))", srell::regex_constants::optimize | srell::regex::icase);
+				newValue = regex_replace(newValue, re_dawnguard, "0x$2~Dawnguard.esm");
+
+				static const srell::regex re_dragonborn(R"((0x0*4)([0-9a-f]{6}))", srell::regex_constants::optimize | srell::regex::icase);
+				newValue = regex_replace(newValue, re_dragonborn, "0x$2~Dragonborn.esm");
+#endif
+
+				//strip spaces between " | "
+				static const srell::regex re_bar(R"(\s*\|\s*)", srell::regex_constants::optimize);
+				newValue = srell::regex_replace(newValue, re_bar, "|");
+
+				//strip spaces between " , "
+				static const srell::regex re_comma(R"(\s*,\s*)", srell::regex_constants::optimize);
+				newValue = srell::regex_replace(newValue, re_comma, ",");
+
+				//convert 00012345 formIDs to 0x12345
+				static const srell::regex re_formID(R"(\b00+([0-9a-fA-F]{1,6})\b)", srell::regex_constants::optimize);
+				newValue = srell::regex_replace(newValue, re_formID, "0x$1");
+
+				//strip leading zeros
+				static const srell::regex re_zeros(R"((0x00+)([0-9a-fA-F]+))", srell::regex_constants::optimize);
+				newValue = srell::regex_replace(newValue, re_zeros, "0x$2");
+
+				//NOT to hyphen
+				//string::replace_all(newValue, "NOT ", "-");
+
+				return newValue;
 			}
 		}
-	}
 
-	if (files.empty()) {
-		logger::warn("	No .ini files with _DISTR suffix were found within the Data folder, aborting...");
-		return false;
-	}
+		void TryParse(const std::string& key, const std::string& value, const Path& path)
+		{
+			try {
+				if (auto optData = Parse<Data,
+						DefaultKeyComponentParser,
+						DistributableFormComponentParser,
+						StringFiltersComponentParser<>,
+						FormFiltersComponentParser<>,
+						LevelFiltersComponentParser,
+						TraitsFilterComponentParser,
+						IndexOrCountComponentParser,
+						ChanceComponentParser>(key, value);
+					optData) {
+					auto& data = *optData;
 
-	logger::info("	{} matching inis found", files.size());
+					data.path = path;
 
-	//initialize map
-	for (size_t i = 0; i < RECORD::kTotal; i++) {
-		configs[RECORD::add[i]] = INIDataMap{};
-	}
-
-	for (auto& path : files) {
-		logger::info("	INI : {}", path);
-
-		CSimpleIniA ini;
-		ini.SetUnicode();
-		ini.SetMultiKey();
-
-		if (const auto rc = ini.LoadFile(path.c_str()); rc < 0) {
-			logger::error("	couldn't read INI");
-			continue;
+					configs[data.type].emplace_back(data);
+				}
+			} catch (const std::exception& e) {
+				logger::warn("\t\tFailed to parse entry [{} = {}]: {}", key, value, e.what());
+			}
 		}
 
-		if (auto values = ini.GetSection(""); values && !values->empty()) {
-			std::multimap<CSimpleIniA::Entry, std::pair<std::string, std::string>, CSimpleIniA::Entry::LoadOrder> oldFormatMap;
+		std::pair<bool, bool> GetConfigs()
+		{
+			logger::info("{:*^50}", "INI");
 
-			for (auto& [key, entry] : *values) {
-			    auto [recordID, data, sanitized_str] = parse_ini(entry);
+			std::vector<std::string> files = distribution::get_configs(R"(Data\)", "_DISTR"sv);
 
-				configs[key.pItem][recordID].emplace_back(data);
+			if (files.empty()) {
+				logger::warn("No .ini files with _DISTR suffix were found within the Data folder, aborting...");
+				return { false, false };
+			}
 
-				if (sanitized_str) {
-					oldFormatMap.emplace(key, std::make_pair(entry, *sanitized_str));
+			logger::info("{} matching inis found", files.size());
+
+			bool shouldLogErrors{ false };
+
+			for (const auto& path : files) {
+				logger::info("\tINI : {}", path);
+
+				CSimpleIniA ini;
+				ini.SetUnicode();
+				ini.SetMultiKey();
+
+				if (const auto rc = ini.LoadFile(path.c_str()); rc < 0) {
+					logger::error("\t\tcouldn't read INI");
+					continue;
+				}
+
+				if (auto values = ini.GetSection(""); values && !values->empty()) {
+					std::multimap<CSimpleIniA::Entry, std::pair<std::string, std::string>, CSimpleIniA::Entry::LoadOrder> oldFormatMap;
+
+					auto truncatedPath = path.substr(5);  //strip "Data\\"
+
+					for (auto& [key, entry] : *values) {
+						try {
+							auto sanitized_str = detail::sanitize(entry);
+
+							if (ExclusiveGroups::INI::TryParse(key.pItem, sanitized_str, truncatedPath)) {
+								continue;
+							}
+
+							if (LinkedDistribution::INI::TryParse(key.pItem, sanitized_str, truncatedPath)) {
+								continue;
+							}
+
+							if (DeathDistribution::INI::TryParse(key.pItem, sanitized_str, truncatedPath)) {
+								continue;
+							}
+
+							TryParse(key.pItem, sanitized_str, truncatedPath);
+
+							if (sanitized_str != entry) {
+								oldFormatMap.emplace(key, std::make_pair(entry, sanitized_str));
+							}
+						} catch (...) {
+							logger::warn("\t\tFailed to parse entry [{} = {}]"sv, key.pItem, entry);
+							shouldLogErrors = true;
+						}
+					}
+
+					if (!oldFormatMap.empty()) {
+						logger::info("\t\tsanitizing {} entries", oldFormatMap.size());
+
+						for (auto& [key, entry] : oldFormatMap) {
+							auto& [original, sanitized] = entry;
+							ini.DeleteValue("", key.pItem, original.c_str());
+							ini.SetValue("", key.pItem, sanitized.c_str(), key.pComment, false);
+						}
+
+						(void)ini.SaveFile(path.c_str());
+					}
 				}
 			}
 
-			if (!oldFormatMap.empty()) {
-				logger::info("		sanitizing {} entries", oldFormatMap.size());
-
-				for (auto& [key, entry] : oldFormatMap) {
-					auto& [original, sanitized] = entry;
-					ini.DeleteValue("", key.pItem, original.c_str());
-					ini.SetValue("", key.pItem, sanitized.c_str(), key.pComment, false);
-				}
-
-				(void)ini.SaveFile(path.c_str());
-			}
+			return { true, shouldLogErrors };
 		}
 	}
-
-	return true;
 }

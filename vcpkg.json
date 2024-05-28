@@ -1,18 +1,16 @@
 {
   "name": "spid-f4",
-  "version-string": "2.0.0",
+  "version-string": "3.0.0",
   "description": "",
   "homepage": "",
   "license": "MIT",
   "dependencies": [
-    "boost-stl-interfaces",
-    "frozen",
-    "robin-hood-hashing",
+    "clib-util",
     "fmt",
     "rsm-mmio",
-    "simpleini",
     "spdlog",
     "srell",
-    "xbyak"
+    "xbyak",
+    "unordered-dense"
   ]
 }

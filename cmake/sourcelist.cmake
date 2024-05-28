@@ -1,14 +1,38 @@
 set(SOURCES
 	include/Cache.h
+	include/DeathDistribution.h
 	include/Defs.h
+	include/DependencyResolver.h
 	include/Distribute.h
+	include/DistributeManager.h
+	include/DistributePCLevelMult.h
+	include/ExclusiveGroups.h
+	include/FormData.h
+	include/KeywordDependencies.h
+	include/LinkedDistribution.h
+	include/LogBuffer.h
 	include/LookupConfigs.h
+	include/LookupFilters.h
 	include/LookupForms.h
+	include/LookupNPC.h
 	include/PCH.h
+	include/PCLevelMultManager.h
+	include/Parser.h
 	src/Cache.cpp
+	src/DeathDistribution.cpp
 	src/Distribute.cpp
+	src/DistributeManager.cpp
+	src/DistributePCLevelMult.cpp
+	src/ExclusiveGroups.cpp
+	src/FormData.cpp
+	src/KeywordDependencies.cpp
+	src/LinkedDistribution.cpp
+	src/LogBuffer.cpp
 	src/LookupConfigs.cpp
+	src/LookupFilters.cpp
 	src/LookupForms.cpp
+	src/LookupNPC.cpp
 	src/PCH.cpp
+	src/PCLevelMultManager.cpp
 	src/main.cpp
 )
