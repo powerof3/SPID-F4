@@ -8,7 +8,6 @@ namespace Distribute
 	void Distribute(NPCData& npcData, const PCLevelMult::Input& input, Forms::DistributionSet& forms, bool allowOverwrites, DistributedForms* accumulatedForms)
 	{
 		const auto npc = npcData.GetNPC();
-		const auto actor = npcData.GetActor();
 
 		for_each_form<RE::BGSKeyword>(
 			npcData, forms.keywords, input, [&](const std::vector<RE::BGSKeyword*>& a_keywords) {

@@ -73,12 +73,12 @@ struct Range
 struct ActorValue
 {
 	std::variant<FormOrEditorID, RE::ActorValueInfo*> type;
-	Range<std::uint8_t> range;
+	Range<float>                                      range;
 };
 
 struct LevelFilters
 {
-	Range<std::uint16_t> actorLevel{};
+	Range<std::uint16_t>    actorLevel{};
 	std::vector<ActorValue> avLevels{};
 };
 

@@ -400,10 +400,10 @@ namespace Distribution::INI
 				//skill min max
 				if (auto skills = string::split(sanitizedLevel, " "); !skills.empty()) {
 					auto type = distribution::get_record(skills[0]);
-					auto minLevel = string::to_num<std::uint8_t>(skills[1]);
+					auto minLevel = string::to_num<float>(skills[1]);
 					
 					if (skills.size() > 2) {
-						auto maxLevel = string::to_num<std::uint8_t>(skills[2]);
+						auto maxLevel = string::to_num<float>(skills[2]);
 						avLevels.push_back({ type, Range(minLevel, maxLevel) });
 					} else {
 						// Single value is treated as exact match.

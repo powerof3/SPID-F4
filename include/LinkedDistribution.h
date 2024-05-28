@@ -245,7 +245,7 @@ namespace LinkedDistribution
 	{
 		for (auto& rawForm : rawLinkedForms) {
 			if (auto form = detail::LookupLinkedForm<Form>(dataHandler, rawForm); form) {
-				auto& [formID, type, scope, distributionType, parentFormIDs, count, chance, path] = rawForm;
+				auto& [formID, distType, scope, distributionType, parentFormIDs, count, chance, path] = rawForm;
 				FormVec parentForms{};
 				if (Forms::detail::formID_to_form(dataHandler, parentFormIDs.MATCH, parentForms, path, LookupOptions::kNone)) {
 					Link(form, scope, distributionType, parentForms, count, chance, path);

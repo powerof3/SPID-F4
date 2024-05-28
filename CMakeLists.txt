@@ -167,7 +167,7 @@ if (MSVC)
 			"/Zc:preprocessor"	# Enable preprocessor conformance mode
 
 			/W4	# Warning level
-			#/WX	# Warning level (warnings are errors)
+			/WX	# Warning level (warnings are errors)
 
 			# disable warnings
 			"/wd4200" # nonstandard extension used: zero-sized array in struct/union 

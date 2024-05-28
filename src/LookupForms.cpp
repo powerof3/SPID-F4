@@ -111,7 +111,7 @@ void LogDistributablesLookup()
 	buffered_logger::clear();
 }
 
-// Lookup forms in exclusvie groups too.
+// Lookup forms in exclusive groups too.
 // P.S. Lookup process probably should build some sort of cache and reuse already discovered forms
 //      instead of quering data handler for the same raw FormOrEditorID.
 void LookupExclusiveGroups(RE::TESDataHandler* const dataHandler)
