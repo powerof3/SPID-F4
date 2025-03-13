@@ -46,23 +46,79 @@
     {
       "name": "f4",
       "hidden": true,
-      "binaryDir": "${sourceDir}/build"
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "ENABLE_FALLOUT_F4": true,
+        "ENABLE_FALLOUT_NG": false,
+        "ENABLE_FALLOUT_VR": false
+      }
+    },
+    {
+      "name": "ng",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/buildng",
+      "cacheVariables": {
+        "ENABLE_FALLOUT_F4": false,
+        "ENABLE_FALLOUT_NG": true,
+        "ENABLE_FALLOUT_VR": false
+      }
+    },
+    {
+      "name": "vr",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/buildvr",
+      "cacheVariables": {
+        "ENABLE_FALLOUT_F4": false,
+        "ENABLE_FALLOUT_NG": false,
+        "ENABLE_FALLOUT_VR": true
+      }
+    },
+    {
+      "name": "all",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/buildall",
+      "cacheVariables": {
+        "ENABLE_FALLOUT_F4": true,
+        "ENABLE_FALLOUT_NG": true,
+        "ENABLE_FALLOUT_VR": true
+      }
     },
     {
       "name": "vs2022-windows-vcpkg-f4",
-      "inherits": [
-        "cmake-dev",
-        "vcpkg",
-        "windows",
-        "vs2022",
-        "f4"
-      ]
+      "inherits": ["cmake-dev", "vcpkg", "windows", "vs2022", "f4"]
+    },
+    {
+      "name": "vs2022-windows-vcpkg-ng",
+      "inherits": ["cmake-dev", "vcpkg", "windows", "vs2022", "ng"]
+    },
+    {
+      "name": "vs2022-windows-vcpkg-vr",
+      "inherits": ["cmake-dev", "vcpkg", "windows", "vs2022", "vr"]
+    },
+    {
+      "name": "vs2022-windows-vcpkg-all",
+      "inherits": ["cmake-dev", "vcpkg", "windows", "vs2022", "all"]
     }
   ],
   "buildPresets": [
     {
+      "name": "vs2022-windows-vcpkg-ng",
+      "configurePreset": "vs2022-windows-vcpkg-ng",
+      "configuration": "Release"
+    },
+    {
       "name": "vs2022-windows-vcpkg-f4",
       "configurePreset": "vs2022-windows-vcpkg-f4",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2022-windows-vcpkg-vr",
+      "configurePreset": "vs2022-windows-vcpkg-vr",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2022-windows-vcpkg-all",
+      "configurePreset": "vs2022-windows-vcpkg-all",
       "configuration": "Release"
     }
   ]

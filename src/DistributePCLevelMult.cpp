@@ -122,7 +122,7 @@ namespace Distribute::PlayerLeveledActor
 	{
 		// ProcessLists::HandlePlayerLevelUpdate
 		// inlined into SetLevel in NG
-		REL::Relocation<std::uintptr_t> target{ REL::ID(2232967), 0xA6 };
+		REL::Relocation<std::uintptr_t> target{ REL::RelocationID(1409967, 2232967), REL::Relocate(0x40, 0xA6) };
 		stl::write_thunk_call<HandleUpdatePlayerLevel>(target.address());
 
 		stl::write_vfunc<RE::Actor, Revert>();

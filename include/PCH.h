@@ -105,19 +105,6 @@ namespace RE
 	using FormID = std::uint32_t;
 	using RefHandle = std::uint32_t;
 	using FormType = ENUM_FORM_ID;
-
-	struct SEXES
-	{
-		enum SEX : std::uint32_t
-		{
-			kNone = static_cast<std::underlying_type_t<SEX>>(-1),
-			kMale = 0,
-			kFemale = 1,
-
-			kTotal = 2
-		};
-	};
-	using SEX = SEXES::SEX;
 }
 
 #include "Cache.h"

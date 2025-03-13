@@ -8,9 +8,17 @@
     "clib-util",
     "fmt",
     "rsm-mmio",
+    "rapidcsv",
     "spdlog",
     "srell",
     "xbyak",
     "unordered-dense"
-  ]
+  ],
+  "overrides": [
+    {
+      "name": "fmt",
+      "version": "10.2.1"
+    }
+  ],
+  "builtin-baseline": "cf72b50294a4aa13e607a0c7b40280b933801698"
 }
